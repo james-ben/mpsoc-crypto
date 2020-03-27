@@ -184,7 +184,8 @@ static int test_decrypt_cbc(void)
 //  uint8_t buffer[64];
     struct AES_ctx ctx;
 
-    AES_init_ctx_iv(&ctx, key, iv);
+    // we need a different key schedule for decryption in CBC mode
+    AES_init_ctx_iv_dec(&ctx, key, iv);
     AES_CBC_decrypt_buffer(&ctx, in, 64);
 
     printf("CBC decrypt: ");
