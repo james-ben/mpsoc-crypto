@@ -8,7 +8,7 @@ OBJS := $(patsubst %.c,%.o,$(OBJS))
 CC := aarch64-linux-gnu-gcc
 
 INC_FLAGS := -I.
-C_FLAGS := $(INC_FLAGS) -g3 -std=c99
+C_FLAGS := $(INC_FLAGS) -g3 -std=gnu99
 
 ARCH_FLAGS := -march=armv8-a+crc+crypto
 

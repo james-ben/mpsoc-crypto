@@ -1,6 +1,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <time.h>
+
+#define NS_TO_S(ns) ((ns) / 1000000000.0)
+#define NUM_TEST_RUNS   (20)
+#define NUM_SUB_RUNS    (50)
+
+#define PRINT_STATUS(status)    if (status) { printf("FAILURE!\t"); } \
+                                else { printf("SUCCESS!\t"); }
+#define RUNTIME_IN_SECONDS(start, stop) ( (long)(stop.tv_sec - start.tv_sec) + \
+                                        NS_TO_S((double)(stop.tv_nsec - start.tv_nsec)) )
 
 // Enable ECB, CTR and CBC mode. Note this can be done before including aes.h or at compile-time.
 // E.g. with GCC by using the -D flag: gcc -c aes.c -DCBC=0 -DCTR=1 -DECB=1
@@ -30,7 +40,15 @@ static void test_encrypt_ecb_verbose(void);
 
 int main(void)
 {
+    // initialize timing
+    struct timespec start, stop;
+    int clockID = CLOCK_THREAD_CPUTIME_ID;
+    double numRuns = NUM_TEST_RUNS;
+
     int exit = 0;
+    int status = 0;
+    long sdiff;
+    double nsdiff;
 
 #if defined(AES256)
     printf("\nTesting AES256\n\n");
@@ -43,13 +61,68 @@ int main(void)
     return 0;
 #endif
 
+
 #if CBC == 1
-    exit += test_encrypt_cbc() + test_decrypt_cbc();
+    double meanCBC = 0;
+    // do a number of test runs to make it statistically accurate
+    printf("CBC encrypt: ");
+    clock_gettime(clockID, &start);
+    for (int i = 0; i < NUM_TEST_RUNS; i++) {
+        status = test_encrypt_cbc();
+        clock_gettime(clockID, &stop);
+        // calculate run-time
+        meanCBC += RUNTIME_IN_SECONDS(start, stop);
+        clock_gettime(clockID, &start);
+    }
+    PRINT_STATUS(status)
+    exit += status;
+    printf("Avg execution time: %fs\n", meanCBC / numRuns);
+
+    meanCBC = 0;
+    printf("CBC decrypt: ");
+    clock_gettime(clockID, &start);
+    for (int i = 0; i < NUM_TEST_RUNS; i++) {
+        status = test_decrypt_cbc();
+        clock_gettime(clockID, &stop);
+        // calculate run-time
+        meanCBC += RUNTIME_IN_SECONDS(start, stop);
+        clock_gettime(clockID, &start);
+    }
+    PRINT_STATUS(status)
+    exit += status;
+    printf("Avg execution time: %fs\n", meanCBC / numRuns);
 #endif
 #if CTR == 1
-	exit += test_encrypt_ctr() + test_decrypt_ctr();
+    double meanCTR = 0;
+    printf("CTR encrypt: ");
+    clock_gettime(clockID, &start);
+    for (int i = 0; i < NUM_TEST_RUNS; i++) {
+        status = test_encrypt_ctr();
+        clock_gettime(clockID, &stop);
+        // calculate run-time
+        meanCTR += RUNTIME_IN_SECONDS(start, stop);
+        clock_gettime(clockID, &start);
+    }
+    PRINT_STATUS(status)
+	exit += status;
+    printf("Avg execution time: %fs\n", meanCTR / numRuns);
+
+    meanCTR = 0;
+    printf("CTR decrypt: ");
+    clock_gettime(clockID, &start);
+    for (int i = 0; i < NUM_TEST_RUNS; i++) {
+        status = test_decrypt_ctr();
+        clock_gettime(clockID, &stop);
+        // calculate run-time
+        meanCTR += RUNTIME_IN_SECONDS(start, stop);
+        clock_gettime(clockID, &start);
+    }
+    PRINT_STATUS(status)
+    exit += status;
+    printf("Avg execution time: %fs\n", meanCTR / numRuns);
 #endif
 #if ECB == 1
+    // nope
 	exit += test_decrypt_ecb() + test_encrypt_ecb();
             test_encrypt_ecb_verbose();
 #endif
@@ -181,22 +254,26 @@ static int test_decrypt_cbc(void)
                       0xae, 0x2d, 0x8a, 0x57, 0x1e, 0x03, 0xac, 0x9c, 0x9e, 0xb7, 0x6f, 0xac, 0x45, 0xaf, 0x8e, 0x51,
                       0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
                       0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
-//  uint8_t buffer[64];
     struct AES_ctx ctx;
+    int retVal = -1;
 
     // we need a different key schedule for decryption in CBC mode
     AES_init_ctx_iv_dec(&ctx, key, iv);
-    AES_CBC_decrypt_buffer(&ctx, in, 64);
 
-    printf("CBC decrypt: ");
-
-    if (0 == memcmp((char*) out, (char*) in, 64)) {
-        printf("SUCCESS!\n");
-	return(0);
-    } else {
-        printf("FAILURE!\n");
-	return(1);
+    for (int i = 0; i < NUM_SUB_RUNS; i++) {
+        AES_CBC_decrypt_buffer(&ctx, in, 64);
+        // this was originally designed for a single run, so we'll only check the first one
+        if (!i) {
+            if (0 == memcmp((char*) out, (char*) in, 64)) {
+                retVal = 0;
+            } else {
+                retVal = 1;
+            }
+        }
+        // the rest of the time, we're just exercising the hardware
     }
+
+    return retVal;
 }
 
 static int test_encrypt_cbc(void)
@@ -227,19 +304,22 @@ static int test_encrypt_cbc(void)
                       0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
                       0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
     struct AES_ctx ctx;
+    int retVal = -1;
 
     AES_init_ctx_iv(&ctx, key, iv);
-    AES_CBC_encrypt_buffer(&ctx, in, 64);
-
-    printf("CBC encrypt: ");
-
-    if (0 == memcmp((char*) out, (char*) in, 64)) {
-        printf("SUCCESS!\n");
-	return(0);
-    } else {
-        printf("FAILURE!\n");
-	return(1);
+    for (int i = 0; i < NUM_SUB_RUNS; i++) {
+        AES_CBC_encrypt_buffer(&ctx, in, 64);
+        // this was originally designed for a single run, so we'll only check the first one
+        if (!i) {
+            if (0 == memcmp((char*) out, (char*) in, 64)) {
+                retVal = 0;
+            } else {
+                retVal = 1;
+            }
+        }
     }
+
+    return retVal;
 }
 #endif
 
@@ -284,19 +364,21 @@ static int test_xcrypt_ctr(const char* xcrypt)
                         0x30, 0xc8, 0x1c, 0x46, 0xa3, 0x5c, 0xe4, 0x11, 0xe5, 0xfb, 0xc1, 0x19, 0x1a, 0x0a, 0x52, 0xef,
                         0xf6, 0x9f, 0x24, 0x45, 0xdf, 0x4f, 0x9b, 0x17, 0xad, 0x2b, 0x41, 0x7b, 0xe6, 0x6c, 0x37, 0x10 };
     struct AES_ctx ctx;
-    
+    int retVal = -1;
+  
     AES_init_ctx_iv(&ctx, key, iv);
-    AES_CTR_xcrypt_buffer(&ctx, in, 64);
-  
-    printf("CTR %s: ", xcrypt);
-  
-    if (0 == memcmp((char *) out, (char *) in, 64)) {
-        printf("SUCCESS!\n");
-	return(0);
-    } else {
-        printf("FAILURE!\n");
-	return(1);
+    for (int i = 0; i < NUM_SUB_RUNS; i++) {
+        AES_CTR_xcrypt_buffer(&ctx, in, 64);
+        if (!i) {
+            if (0 == memcmp((char *) out, (char *) in, 64)) {
+                retVal = 0;
+            } else {
+                retVal = 1;
+            }
+        }
     }
+
+    return retVal;
 }
 #endif
 
