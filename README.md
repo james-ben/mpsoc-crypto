@@ -58,6 +58,12 @@ Resources
 SHA 256
 =========
 
-Possible source: [mbed TLS](https://tls.mbed.org/sha-256-source-code)
+Possible source: [mbed TLS](https://tls.mbed.org/sha-256-source-code)  
+This is more secure than the other one, but more complicated.
 
-Simpler source: [crypto-algorithms](https://github.com/B-Con/crypto-algorithms)
+Software Implementation
+--------------------------
+
+Using this implementation: [crypto-algorithms](https://github.com/B-Con/crypto-algorithms)
+
+Again, I created my own Makefile
