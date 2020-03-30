@@ -52,3 +52,12 @@ Resources
 - [FreeBSD implementation](https://reviews.freebsd.org/D8297)
 - [aes-internal.c](https://github.com/freebsd/freebsd/blob/1d6e4247415d264485ee94b59fdbc12e0c566fd0/contrib/wpa/src/crypto/aes-internal.c) - FreeBSD source
 - [aes-internal-dec.c](https://github.com/freebsd/freebsd/blob/b25216505e3b0336ead4a0b98046ace71a7d58da/contrib/wpa/src/crypto/aes-internal-dec.c) - FreeBSD source
+
+
+
+SHA 256
+=========
+
+Possible source: [mbed TLS](https://tls.mbed.org/sha-256-source-code)
+
+Simpler source: [crypto-algorithms](https://github.com/B-Con/crypto-algorithms)
