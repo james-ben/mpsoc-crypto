@@ -21,6 +21,7 @@
 #include <memory.h>
 #include <string.h>
 #include <time.h>
+#include <stdlib.h>
 
 #include "sha256.h"
 
@@ -85,6 +86,33 @@ int sha256_test3()
     return(pass);
 }
 
+int sha256_test4()
+{
+    // open file
+    WORD fileSize = 1048576;
+    BYTE* file4 = malloc(fileSize); // for null terminator
+    FILE* ptr;
+    ptr = fopen("../testData/rand.dat","rb");
+    fread(file4, 1, fileSize, ptr);
+    fclose(ptr);
+
+    // from sha256sum
+    BYTE hash4[SHA256_BLOCK_SIZE] = {0xd3,0xe5,0x99,0x89,0x30,0x89,0x99,0xea,
+                                     0xa9,0x6d,0x02,0x4e,0xe3,0xef,0x00,0x6b,
+                                     0x8e,0x57,0x3a,0x66,0x4c,0x40,0x74,0x28,
+                                     0xf7,0xd1,0xa2,0x9e,0xad,0xad,0xf6,0xa9};
+
+    BYTE buf[SHA256_BLOCK_SIZE];
+    SHA256_CTX ctx;
+    int idx;
+    int pass = 1;
+
+    sha256_hash_file(&ctx, file4, buf, fileSize);
+    pass = pass && !memcmp(hash4, buf, SHA256_BLOCK_SIZE);
+
+    return(pass);
+}
+
 int main()
 {
     // initialize timing
@@ -125,6 +153,19 @@ int main()
     clock_gettime(clockID, &start);
     for (int i = 0; i < NUM_TEST_RUNS; i++) {
         status = sha256_test3();
+        clock_gettime(clockID, &stop);
+        if (!i) {
+            PRINT_STATUS(status);
+        }
+        meanTime += RUNTIME_IN_SECONDS(start, stop);
+        clock_gettime(clockID, &start);
+    }
+    printf("Avg execution time: %fs\n", meanTime / numRuns);
+
+    printf("SHA-256 test 4: ");
+    clock_gettime(clockID, &start);
+    for (int i = 0; i < NUM_TEST_RUNS; i++) {
+        status = sha256_test4();
         clock_gettime(clockID, &stop);
         if (!i) {
             PRINT_STATUS(status);
