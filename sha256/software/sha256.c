@@ -156,3 +156,13 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 		hash[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
 	}
 }
+
+void sha256_hash(SHA256_CTX* ctx, const BYTE data[], BYTE hash[], size_t runLen)
+{
+	size_t idx;
+	size_t len = strlen(data);
+	sha256_init(ctx);
+	for (idx = 0; idx < runLen; ++idx)
+		sha256_update(ctx, data, len);
+    sha256_final(ctx, hash);
+}

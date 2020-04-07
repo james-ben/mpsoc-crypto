@@ -173,29 +173,3 @@ void sha256_hash(SHA256_CTX* ctx, const BYTE data[], BYTE hash[], size_t runLen)
 		sha256_update(ctx, data, len);
     sha256_final(ctx, hash);
 }
-
-
-// inline hash_t hash_neon(hash_t old, uint32x4_t round_input) {
-// 	hash_t ret;
-// 	ret.abcd = vsha256hq_u32(old.abcd, old.efgh, round_input);
-// 	ret.efgh = vsha256h2q_u32(old.efgh, old.abcd, round_input);
-// 	return ret;
-// }
-
-
-// void sha256_hash_neon(SHA256_CTX* ctx, const BYTE data[], BYTE hash[], size_t runLen)
-// {
-// 	size_t idx, len;
-// 	len = strlen(data);
-
-// 	uint32x4_t sched[4];
-// 	hash_t hash_state;
-// 	for (int i = 0; i < 4, i++) {
-// 		sched[i] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(data + 16*i)));
-// 		uint32x4_t round_input = vaddq_u32(sched[i], ctx->state[i*4]);
-// 		hash_state = hash_neon(hash_state, round_input);
-// 	}
-// 	for (i = 4; i < 16; i++) {
-		
-// 	}
-// }
