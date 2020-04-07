@@ -18,17 +18,6 @@
 #include <arm_neon.h>
 #include "sha256.h"
 
-/****************************** MACROS ******************************/
-#define ROTLEFT(a,b) (((a) << (b)) | ((a) >> (32-(b))))
-#define ROTRIGHT(a,b) (((a) >> (b)) | ((a) << (32-(b))))
-
-#define CH(x,y,z) (((x) & (y)) ^ (~(x) & (z)))
-#define MAJ(x,y,z) (((x) & (y)) ^ ((x) & (z)) ^ ((y) & (z)))
-#define EP0(x) (ROTRIGHT(x,2) ^ ROTRIGHT(x,13) ^ ROTRIGHT(x,22))
-#define EP1(x) (ROTRIGHT(x,6) ^ ROTRIGHT(x,11) ^ ROTRIGHT(x,25))
-#define SIG0(x) (ROTRIGHT(x,7) ^ ROTRIGHT(x,18) ^ ((x) >> 3))
-#define SIG1(x) (ROTRIGHT(x,17) ^ ROTRIGHT(x,19) ^ ((x) >> 10))
-
 /**************************** VARIABLES *****************************/
 static const WORD k[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -41,6 +30,7 @@ static const WORD k[64] = {
 	0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
 
+/****************************** TYPES *******************************/
 struct hash_s {
 	uint32x4_t abcd, efgh;
 };
@@ -50,28 +40,31 @@ typedef struct hash_s hash_state_t;
 void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
 {
 	WORD i;
-	// TODO: we actually only need 1/4 of the schedule saved in memory
-	uint32x4_t sched[16];
+	uint32x4_t round_input;
+	// we actually only need 1/4 of the schedule saved in memory
+	uint32x4_t sched[4];
 	hash_state_t cur_state, old_state;
-
-	// make the schedule
-	for (i = 0; i < 4; i++) {
-		// reverses the byte ordering
-		sched[i] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(data + 16*i)));
-	}
-	for (i = 4; i < 16; i++) {
-		sched[i] = vsha256su1q_u32(vsha256su0q_u32(
-					sched[i-4], sched[i-3]), sched[i-2], sched[i-1]);
-	}
 
 	// load state
 	cur_state.abcd = vld1q_u32(ctx->state);
 	cur_state.efgh = vld1q_u32(ctx->state+4);
 
-	// do the hashing
-	uint32x4_t round_input;
-	for (i = 0; i < 16; i++) {
+	// make the schedule
+	for (i = 0; i < 4; i++) {
+		// reverses the byte ordering
+		sched[i] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(data + 16*i)));
 		round_input = vaddq_u32(sched[i], vld1q_u32(k + i*4));
+		old_state.abcd = cur_state.abcd;
+		old_state.efgh = cur_state.efgh;
+		cur_state.abcd = vsha256hq_u32 (old_state.abcd, old_state.efgh, round_input);
+		cur_state.efgh = vsha256h2q_u32(old_state.efgh, old_state.abcd, round_input);
+	}
+	for (i = 4; i < 16; i++) {
+		// mod arithmetic, use sched in a round
+		sched[i%4] = vsha256su1q_u32(vsha256su0q_u32(
+					sched[ i   %4], sched[(i+1)%4]),
+					sched[(i+2)%4], sched[(i+3)%4]);
+		round_input = vaddq_u32(sched[i%4], vld1q_u32(k + i*4));
 		old_state.abcd = cur_state.abcd;
 		old_state.efgh = cur_state.efgh;
 		cur_state.abcd = vsha256hq_u32 (old_state.abcd, old_state.efgh, round_input);
@@ -146,15 +139,10 @@ void sha256_final(SHA256_CTX *ctx, BYTE hash[])
 
 	// Since this implementation uses little endian byte ordering and SHA uses big endian,
 	// reverse all the bytes when copying the final state to the output hash.
-	for (i = 0; i < 4; ++i) {
-		hash[i]      = (ctx->state[0] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 4]  = (ctx->state[1] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 8]  = (ctx->state[2] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 12] = (ctx->state[3] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 16] = (ctx->state[4] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 20] = (ctx->state[5] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 24] = (ctx->state[6] >> (24 - i * 8)) & 0x000000ff;
-		hash[i + 28] = (ctx->state[7] >> (24 - i * 8)) & 0x000000ff;
+	// for (i = 0; i < 4; ++i) {
+	for (i = 0; i < 8; i+=4) {
+		vst1q_u8(hash + (i*4),
+				vrev32q_u8(vld1q_u8((BYTE*)&ctx->state[i])));
 	}
 }
 
