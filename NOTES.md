@@ -46,3 +46,4 @@ Intrinsic reference
 
 see also `vstrq_p128`, `vst1q_u8`, `vld1q_u8`
 other encryption stuff: `vsm4eq_u32`, `vsm4ekeyq_u32`, and the `vsm3*` intrinsics
+and __crc32cd
