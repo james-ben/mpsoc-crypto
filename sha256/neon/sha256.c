@@ -18,6 +18,9 @@
 #include <arm_neon.h>
 #include "sha256.h"
 
+/*************************** DEFINITIONS ****************************/
+// #define ROLLED_UP_METHOD
+
 /**************************** VARIABLES *****************************/
 static const WORD k[64] = {
 	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -41,9 +44,10 @@ void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
 {
 	WORD i;
 	uint32x4_t round_input;
+	hash_state_t cur_state, old_state;
+#ifdef ROLLED_UP_METHOD
 	// we actually only need 1/4 of the schedule saved in memory
 	uint32x4_t sched[4];
-	hash_state_t cur_state, old_state;
 
 	// load state
 	cur_state.abcd = vld1q_u32(ctx->state);
@@ -70,6 +74,32 @@ void sha256_transform(SHA256_CTX *ctx, const BYTE data[])
 		cur_state.abcd = vsha256hq_u32 (old_state.abcd, old_state.efgh, round_input);
 		cur_state.efgh = vsha256h2q_u32(old_state.efgh, old_state.abcd, round_input);
 	}
+#else
+	uint32x4_t sched[16];
+
+	// make the schedule
+	for (i = 0; i < 4; i++) {
+		// reverses the byte ordering
+		sched[i] = vreinterpretq_u32_u8(vrev32q_u8(vld1q_u8(data + 16*i)));
+	}
+	for (i = 4; i < 16; i++) {
+		sched[i] = vsha256su1q_u32(vsha256su0q_u32(
+				sched[i-4], sched[i-3]), sched[i-2], sched[i-1]);
+	}
+
+	// load state
+	cur_state.abcd = vld1q_u32(ctx->state);
+	cur_state.efgh = vld1q_u32(ctx->state+4);
+
+	// do the hashing
+	for (i = 0; i < 16; i++) {
+		round_input = vaddq_u32(sched[i], vld1q_u32(k + i*4));
+		old_state.abcd = cur_state.abcd;
+		old_state.efgh = cur_state.efgh;
+		cur_state.abcd = vsha256hq_u32 (old_state.abcd, old_state.efgh, round_input);
+		cur_state.efgh = vsha256h2q_u32(old_state.efgh, old_state.abcd, round_input);
+	}
+#endif
 
 	// add in the state
 	vst1q_u32(ctx->state, vaddq_u32(cur_state.abcd, vld1q_u32(ctx->state)));
